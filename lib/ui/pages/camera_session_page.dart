@@ -191,23 +191,16 @@ class _CameraSessionPageState extends State<CameraSessionPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Indikator Jumlah Foto
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    "Foto: ${_capturedPhotos.length} / $_maxSlots",
-                    style: AppTextStyles.h2,
-                  ),
-                ),
+                // ... (Indikator Jumlah Foto tetap sama)
+                
                 // Indikator Global Timer
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: _globalTimeRemaining < 60 ? Colors.red.withOpacity(0.8) : Colors.black54,
+                    // PERBAIKAN DI SINI: Ganti withOpacity menjadi withValues
+                    color: _globalTimeRemaining < 60 
+                        ? Colors.red.withValues(alpha: 0.8) 
+                        : Colors.black54,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(

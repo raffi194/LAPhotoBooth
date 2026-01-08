@@ -9,14 +9,13 @@ class OnboardingPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: InkWell(
-        // Seluruh layar bisa diklik untuk mulai
         onTap: () {
           Navigator.pushNamed(context, '/payment');
         },
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // 1. Background Image (Opsional, ganti dengan Image.asset nanti)
+            // 1. Background Image
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -24,7 +23,8 @@ class OnboardingPage extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: [
                     AppColors.background,
-                    AppColors.primary.withOpacity(0.2),
+                    // PERBAIKAN DI SINI: Ganti withOpacity menjadi withValues
+                    AppColors.primary.withValues(alpha: 0.2),
                   ],
                 ),
               ),
@@ -40,17 +40,14 @@ class OnboardingPage extends StatelessWidget {
                   color: AppColors.secondary,
                 ),
                 const SizedBox(height: 40),
-                const Text(
-                  "LA PHOTOBOOTH",
-                  style: AppTextStyles.h1,
-                ),
+                const Text("LA PHOTOBOOTH", style: AppTextStyles.h1),
                 const SizedBox(height: 20),
                 Text(
                   "Sentuh Layar untuk Memulai",
                   style: AppTextStyles.h2.copyWith(color: AppColors.primary),
                 ),
                 const SizedBox(height: 60),
-                
+
                 // Instruksi Singkat
                 Container(
                   padding: const EdgeInsets.all(20),
@@ -64,9 +61,15 @@ class OnboardingPage extends StatelessWidget {
                     children: [
                       _InstructionItem(icon: Icons.timer, text: "5 Menit Sesi"),
                       SizedBox(width: 30),
-                      _InstructionItem(icon: Icons.print, text: "Cetak Langsung"),
+                      _InstructionItem(
+                        icon: Icons.print,
+                        text: "Cetak Langsung",
+                      ),
                       SizedBox(width: 30),
-                      _InstructionItem(icon: Icons.qr_code, text: "Download Digital"),
+                      _InstructionItem(
+                        icon: Icons.qr_code,
+                        text: "Download Digital",
+                      ),
                     ],
                   ),
                 ),
