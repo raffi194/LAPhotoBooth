@@ -17,19 +17,20 @@ class _CameraSessionPageState extends State<CameraSessionPage> {
   CameraController? _cameraController;
   List<CameraDescription>? _cameras;
   bool _isCameraInitialized = false;
+  String? _errorMessage; // Untuk menampilkan error jika ada
   
   // --- Logic Foto ---
-  final List<XFile> _capturedPhotos = []; // Menyimpan foto yang sudah di-keep
-  XFile? _tempPhoto; // Foto sementara saat review (sebelum di-keep)
-  final int _maxSlots = 3; // Nanti ini bisa diambil dari argument Frame yang dipilih
+  final List<XFile> _capturedPhotos = []; 
+  XFile? _tempPhoto; 
+  final int _maxSlots = 3; 
 
   // --- Logic Timer ---
   Timer? _globalTimer;
-  int _globalTimeRemaining = 300; // 5 Menit (300 detik)
+  int _globalTimeRemaining = 300; // 5 Menit
   
   Timer? _shutterTimer;
-  int _shutterTimeRemaining = 10; // 10 Detik sebelum jepret
-  bool _isCountingDown = false; // Sedang menghitung mundur untuk foto?
+  int _shutterTimeRemaining = 5; 
+  bool _isCountingDown = false; 
 
   @override
   void initState() {
@@ -46,119 +47,133 @@ class _CameraSessionPageState extends State<CameraSessionPage> {
     super.dispose();
   }
 
-  // 1. Inisialisasi Kamera (Cari kamera pertama/webcam)
+  // 1. Inisialisasi Kamera (Versi Stabil Windows)
   Future<void> _initializeCamera() async {
     try {
       _cameras = await availableCameras();
       if (_cameras!.isNotEmpty) {
-        // Gunakan kamera pertama (biasanya webcam default)
+        // Ambil kamera pertama
+        final camera = _cameras!.first;
+
         _cameraController = CameraController(
-          _cameras![0],
-          ResolutionPreset.high, // Resolusi tinggi untuk cetak
+          camera,
+          // TIPS: Gunakan medium dulu agar aman di semua jenis webcam laptop
+          ResolutionPreset.medium, 
           enableAudio: false,
+          // PENTING: Wajib diset JPEG untuk Windows agar preview muncul
+          imageFormatGroup: ImageFormatGroup.jpeg, 
         );
 
         await _cameraController!.initialize();
+        
+        // PENTING: Beri jeda sedikit agar driver kamera Windows siap
+        await Future.delayed(const Duration(milliseconds: 200));
+
         if (mounted) {
           setState(() {
             _isCameraInitialized = true;
           });
         }
       } else {
-        debugPrint("Tidak ada kamera ditemukan!");
+        setState(() => _errorMessage = "Tidak ada kamera ditemukan!");
       }
     } catch (e) {
       debugPrint("Error inisialisasi kamera: $e");
+      if (mounted) {
+        setState(() => _errorMessage = "Gagal memuat kamera: $e");
+      }
     }
   }
 
-  // 2. Timer Global (Sesi 5 Menit)
+  // 2. Timer Global
   void _startGlobalTimer() {
     _globalTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_globalTimeRemaining > 0) {
-        setState(() {
-          _globalTimeRemaining--;
-        });
-      } else {
-        // Waktu Habis -> Paksa selesai atau kembali ke awal
-        timer.cancel();
-        _finishSession();
+      if (mounted) {
+        if (_globalTimeRemaining > 0) {
+          setState(() {
+            _globalTimeRemaining--;
+          });
+        } else {
+          timer.cancel();
+          _finishSession();
+        }
       }
     });
   }
 
-  // 3. Timer Shutter (10 detik sebelum foto)
+  // 3. Timer Shutter
   void _startShutterCountdown() {
     if (_cameraController == null || !_cameraController!.value.isInitialized) return;
 
     setState(() {
       _isCountingDown = true;
-      _shutterTimeRemaining = 10; // Reset ke 10 detik
+      _shutterTimeRemaining = 5; // Hitung mundur 5 detik
     });
 
     _shutterTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_shutterTimeRemaining > 1) {
-        setState(() {
-          _shutterTimeRemaining--;
-        });
-      } else {
-        // Waktu jepret!
-        timer.cancel();
-        _takePicture();
+      if (mounted) {
+        if (_shutterTimeRemaining > 1) {
+          setState(() {
+            _shutterTimeRemaining--;
+          });
+        } else {
+          timer.cancel();
+          _takePicture();
+        }
       }
     });
   }
 
   // 4. Proses Ambil Foto
   Future<void> _takePicture() async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+
     try {
       final XFile photo = await _cameraController!.takePicture();
-      setState(() {
-        _isCountingDown = false; // Stop countdown UI
-        _tempPhoto = photo; // Tampilkan mode review
-      });
+      if (mounted) {
+        setState(() {
+          _isCountingDown = false;
+          _tempPhoto = photo;
+        });
+      }
     } catch (e) {
       debugPrint("Gagal ambil foto: $e");
-      setState(() => _isCountingDown = false);
+      if (mounted) {
+        setState(() => _isCountingDown = false);
+      }
     }
   }
 
-  // 5. User Memilih "Keep" (Simpan Foto)
   void _keepPhoto() {
     if (_tempPhoto != null) {
       setState(() {
         _capturedPhotos.add(_tempPhoto!);
-        _tempPhoto = null; // Kembali ke mode kamera
+        _tempPhoto = null;
       });
 
-      // Cek apakah slot sudah penuh?
       if (_capturedPhotos.length >= _maxSlots) {
         _finishSession();
       }
     }
   }
 
-  // 6. User Memilih "Retake" (Buang Foto)
   void _retakePhoto() {
     setState(() {
-      _tempPhoto = null; // Hapus temp, kembali ke kamera
+      _tempPhoto = null;
     });
   }
 
-  // 7. Selesai Sesi -> Pindah ke Editing
   void _finishSession() {
     _globalTimer?.cancel();
-    // Kirim data foto ke halaman berikutnya
     Navigator.pushNamed(
       context, 
       '/editing', 
-      arguments: _capturedPhotos, // Kirim list foto
+      arguments: _capturedPhotos, 
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Format Waktu Menit:Detik
     final String globalTimerStr = 
         '${(_globalTimeRemaining ~/ 60).toString().padLeft(2, '0')}:${(_globalTimeRemaining % 60).toString().padLeft(2, '0')}';
 
@@ -168,14 +183,14 @@ class _CameraSessionPageState extends State<CameraSessionPage> {
         children: [
           // A. LAYER KAMERA / PREVIEW
           Positioned.fill(
-            child: _isCameraInitialized
+            child: _errorMessage != null
+              ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)))
+              : _isCameraInitialized
                 ? (_tempPhoto == null)
-                    // Jika tidak sedang review, tampilkan kamera live
                     ? AspectRatio(
                         aspectRatio: _cameraController!.value.aspectRatio,
                         child: CameraPreview(_cameraController!),
                       )
-                    // Jika sedang review, tampilkan hasil foto
                     : Image.file(
                         File(_tempPhoto!.path),
                         fit: BoxFit.cover,
@@ -183,7 +198,7 @@ class _CameraSessionPageState extends State<CameraSessionPage> {
                 : const Center(child: CircularProgressIndicator()),
           ),
 
-          // B. LAYER OVERLAY UI (Timer & Progress)
+          // B. LAYER OVERLAY UI
           Positioned(
             top: 40,
             left: 20,
@@ -191,13 +206,20 @@ class _CameraSessionPageState extends State<CameraSessionPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // ... (Indikator Jumlah Foto tetap sama)
-                
-                // Indikator Global Timer
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    // PERBAIKAN DI SINI: Ganti withOpacity menjadi withValues
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    "Foto: ${_capturedPhotos.length} / $_maxSlots",
+                    style: AppTextStyles.h2,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
                     color: _globalTimeRemaining < 60 
                         ? Colors.red.withValues(alpha: 0.8) 
                         : Colors.black54,
@@ -215,7 +237,7 @@ class _CameraSessionPageState extends State<CameraSessionPage> {
             ),
           ),
 
-          // C. LAYER COUNTDOWN TENGAH (3..2..1)
+          // C. COUNTDOWN
           if (_isCountingDown)
             Center(
               child: Text(
@@ -231,15 +253,15 @@ class _CameraSessionPageState extends State<CameraSessionPage> {
               ),
             ),
 
-          // D. LAYER TOMBOL KONTROL BAWAH
+          // D. CONTROLS
           Positioned(
             bottom: 50,
             left: 0,
             right: 0,
             child: Center(
               child: _tempPhoto == null
-                  ? _buildCameraControls() // Tombol Shutter
-                  : _buildReviewControls(), // Tombol Keep/Retake
+                  ? _buildCameraControls()
+                  : _buildReviewControls(),
             ),
           ),
         ],
@@ -247,10 +269,9 @@ class _CameraSessionPageState extends State<CameraSessionPage> {
     );
   }
 
-  // Widget Tombol Mulai Foto
   Widget _buildCameraControls() {
     return _isCountingDown
-        ? const SizedBox() // Sembunyikan tombol saat hitung mundur
+        ? const SizedBox()
         : InkWell(
             onTap: _startShutterCountdown,
             child: Container(
@@ -266,12 +287,10 @@ class _CameraSessionPageState extends State<CameraSessionPage> {
           );
   }
 
-  // Widget Tombol Review (Keep / Retake)
   Widget _buildReviewControls() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Tombol Retake
         ElevatedButton.icon(
           onPressed: _retakePhoto,
           icon: const Icon(Icons.refresh),
@@ -283,7 +302,6 @@ class _CameraSessionPageState extends State<CameraSessionPage> {
           ),
         ),
         const SizedBox(width: 40),
-        // Tombol Keep
         ElevatedButton.icon(
           onPressed: _keepPhoto,
           icon: const Icon(Icons.check),
